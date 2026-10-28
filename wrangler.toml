@@ -1,0 +1,7 @@
+name = "vicons-svg-api"
+main = "src/index.ts"
+compatibility_date = "2026-10-01"
+
+[vars]
+# Set a custom domain/route in the Cloudflare dashboard after deployment.
+SOURCE_REF = "main"
