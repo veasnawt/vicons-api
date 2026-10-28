@@ -1,58 +1,114 @@
 # VIcons API
 
-A standalone Cloudflare Worker that makes the existing monochrome [VIcons](https://github.com/veasnawt/vicons) SVG symbols customizable in Markdown image URLs. It is **not deployed** and the illustrative domain below does not work yet.
+Dynamic, customizable SVG icons for Markdown, GitHub READMEs, and websites. Built on the [VIcons](https://github.com/veasnawt/vicons) icon set and deployed as a lightweight Cloudflare Worker. No React installation is required.
 
-## Run locally
+## Live endpoint
+
+**Current deployment:** https://vicons-svg-api.veasnawt.workers.dev
+
+```markdown
+![Veasna OS](https://vicons-svg-api.veasnawt.workers.dev/desktop.svg?color=01AEF0&size=48)
+```
+
+A custom hostname such as `icons.veasnawt.com` is planned but **not configured or verified yet**. Do not change README examples to it until its HTTPS endpoint works.
+
+## URL format
+
+`GET /:name.svg?color=01AEF0&size=48&stroke=1.5`
+
+| Parameter | Default | Accepted values | Example |
+| --- | --- | --- | --- |
+| `name` | Required | Existing lowercase VIcons symbol name | `desktop.svg` |
+| `color` | `111111` | 3, 6, or 8 hex digits; optionally prefix with URL-encoded `%23` | `01AEF0` |
+| `size` | `24` | Integer from 8 to 512 | `48` |
+| `stroke` | `2` | Number from 0.5 to 4 | `1.5` |
+| `strokeWidth` | `2` | Alias for `stroke`; do not use both | `1.5` |
+
+Unknown or duplicated query parameters return HTTP 400; invalid icon paths return 404; unknown icons return 404.
+
+### Color and size
+
+```markdown
+![Blue desktop](https://vicons-svg-api.veasnawt.workers.dev/desktop.svg?color=01AEF0&size=48)
+![Purple desktop](https://vicons-svg-api.veasnawt.workers.dev/desktop.svg?color=8B5CF6&size=64&stroke=1.5)
+```
+
+### GitHub light/dark theme
+
+The theme fragment belongs **after** the query string:
+
+```markdown
+![Desktop](https://vicons-svg-api.veasnawt.workers.dev/desktop.svg?color=111111&size=48#gh-light-mode-only)
+![Desktop](https://vicons-svg-api.veasnawt.workers.dev/desktop.svg?color=FFFFFF&size=48#gh-dark-mode-only)
+```
+
+Or use GitHub's HTML `<picture>` markup:
+
+```html
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://vicons-svg-api.veasnawt.workers.dev/desktop.svg?color=FFFFFF&amp;size=48">
+  <img src="https://vicons-svg-api.veasnawt.workers.dev/desktop.svg?color=111111&amp;size=48" width="48" alt="Desktop icon">
+</picture>
+```
+
+The `size` parameter sets the SVG's intrinsic dimensions. A Markdown renderer may still impose its own display sizing.
+
+## Develop locally
+
+Requirements: Node.js 22+ and npm. Node.js 24 LTS is a suitable choice.
 
 ```bash
-npm install
+npm ci
 npm test
 npm run typecheck
 npm run dev
 ```
 
-Local example: `http://localhost:8787/desktop.svg?color=01AEF0&size=48&stroke=1.5`.
+Try `http://127.0.0.1:8787/desktop.svg?color=01AEF0&size=48` while the dev server is running. All 12 core unit tests were previously reported passing; verify your checkout independently.
 
-## Deploy (after review)
+## Deploy
 
 ```bash
 npx wrangler login
 npm run deploy
 ```
 
-Cloudflare prints a real `*.workers.dev` URL. Try that URL before configuring a custom domain. Add `icons.vicons.dev` only if you own/control that domain; otherwise select an owned subdomain.
+The Worker name is `vicons-svg-api`, and `SOURCE_REF` currently points to `main` in the upstream VIcons repository. Consider pinning a verified immutable commit or release for reproducible production output, with a documented icon-update process.
 
-## API
+### Connect a branded custom domain
 
-`GET /:name.svg?color=01AEF0&size=48&stroke=1.5`
+**Recommended hostname:** `icons.veasnawt.com`. This keeps the API separate from the main `veasnawt.com` website, while permitting `veasnawt.com/vicons/` to be a documentation or landing page.
 
-- `name`: lowercase VIcons symbol basename, e.g. `desktop`.
-- `color`: 3, 6 or 8 hex digits, optional leading `#` (URL-encode as `%23`); defaults to `111111`.
-- `size`: integer 8–512, default 24; sets SVG intrinsic width and height.
-- `stroke`/`strokeWidth`: 0.5–4, default 2.
-- Unknown parameters and malformed values return 400.
-- Missing names return 404.
-- Image sources are fetched only from the hardcoded VIcons repo, never user-controlled URLs.
+Prerequisites: `veasnawt.com` must be an active zone in your Cloudflare account, and the `icons` hostname must not conflict with an existing record. Verify current DNS/hosting before making changes.
 
-Once deployed, this works in GitHub Markdown:
+In Cloudflare Dashboard: **Workers & Pages → vicons-svg-api → Settings → Domains & Routes → Add → Custom Domain**, then enter `icons.veasnawt.com`. Cloudflare manages the required DNS record and TLS certificate for a supported custom domain.
 
-```markdown
-![Veasna OS](https://YOUR-WORKER-URL/desktop.svg?color=01AEF0&size=48)
+Once configured, check `https://icons.veasnawt.com/health` and test the SVG before advertising the new address. Keep the `workers.dev` hostname available as a fallback.
+
+**Alternatively, when domain prerequisites are verified**, declare the custom domain in `wrangler.toml`:
+
+```toml
+workers_dev = true
+
+[[routes]]
+pattern = "icons.veasnawt.com"
+custom_domain = true
 ```
 
-For dark/light themes use two URLs with GitHub's `#gh-light-mode-only` / `#gh-dark-mode-only` fragments, or HTML `<picture>` with the Worker URLs as the `srcset`.
+Do **not** attach a custom domain directly to the apex `veasnawt.com`, because that would send all of the main site's traffic to the SVG Worker.
 
-**Note:** SVG `size` controls the intrinsic rendered dimensions; some Markdown hosts can override displayed dimensions through CSS.
+To host the API at `veasnawt.com/vicons/` instead, you need a path-specific Worker route plus an explicit `/vicons/` rewrite in the application. That is a separate routing change, not equivalent to a custom domain.
 
-## Production checklist
+## Security and operations
 
-- Verify sample icons and run tests and typecheck.
-- Pin `SOURCE_REF` to an immutable release tag for predictable caching before production (rather than tracking `main`).
-- Add rate limiting and monitor abuse/egress if publicly exposed at scale.
-- Audit SVG sources and monitor requests returning 422 (unsupported/suspicious SVG).
-- Configure custom domain and CDN caching only after the endpoint is verified.
-- Keep API separate from React package `@veasnawt/vicons` for backward compatibility.
+- Icon sources are restricted to the trusted [VIcons repository](https://github.com/veasnawt/vicons), not caller-provided URLs.
+- Request parameters are validated, and source SVGs pass safety checks before being returned.
+- Use release-pinned source assets for predictable behavior as the icon library evolves.
+- Monitor rate limits, cache behavior, errors, and abuse before recommending the service for high-traffic sites.
+- The upstream React package `@veasnawt/vicons` remains independent of the API.
 
-## Integration
+## Related projects
 
-This is a separate repository, intended to live at `veasnawt/vicons-api`. It consumes immutable, versioned SVG sources from [`veasnawt/vicons`](https://github.com/veasnawt/vicons), without modifying or requiring React. Once deployed, add API examples and a Markdown generator to the original VIcons documentation.
+- [VIcons core library](https://github.com/veasnawt/vicons)
+- [VIcons icon browser](https://veasnawt.github.io/vicons)
+- [Cloudflare Workers custom domains documentation](https://developers.cloudflare.com/workers/configuration/routing/custom-domains/)
