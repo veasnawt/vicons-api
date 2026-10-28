@@ -1,0 +1,7 @@
+# Optional snippet to add to wrangler.toml ONLY after confirming
+# veasnawt.com is an active Cloudflare zone and the hostname is available.
+workers_dev = true
+
+[[routes]]
+pattern = "icons.veasnawt.com"
+custom_domain = true
